@@ -13,24 +13,17 @@ Configuración via variables de entorno (Railway):
 import os
 import time
 import requests
-import json
 from datetime import datetime
 
-# ──────────────────────────────────────────────
-# CONFIGURACIÓN desde variables de entorno
-# ──────────────────────────────────────────────
 CANAL = os.environ.get("TWITCH_CHANNEL", "")
 AUTH_TOKEN = os.environ.get("TWITCH_AUTH_TOKEN", "")
 CHECK_INTERVAL = int(os.environ.get("CHECK_INTERVAL", "60"))
 
-CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"  # Client ID público de Twitch web
-
-# ──────────────────────────────────────────────
+CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
 
 def log(mensaje):
     ahora = datetime.now().strftime("%H:%M:%S")
     print(f"[{ahora}] {mensaje}", flush=True)
-
 
 def obtener_headers():
     return {
@@ -42,60 +35,58 @@ def obtener_headers():
         "Referer": f"https://www.twitch.tv/{CANAL}",
     }
 
-
 def canal_en_vivo():
-    """Verifica si el canal está transmitiendo usando la API GQL de Twitch."""
     url = "https://gql.twitch.tv/gql"
-    query = [{
-        "operationName": "StreamMetadata",
-        "variables": {"channelLogin": CANAL},
-        "extensions": {
-            "persistedQuery": {
-                "version": 1,
-                "sha256Hash": "a647c2a13599e5991e175155f798ca7f1ecddde73f7f341f39009c14dbf59121"
+    query = [
+        {
+            "operationName": "StreamMetadata",
+            "variables": {"channelLogin": CANAL.lower()},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "a647c2a13599e5991e175155f798ca7f1ecddde73f7f341f39009c14dbf59121"
+                }
             }
         }
-    }]
-
+    ]
     try:
         resp = requests.post(url, json=query, headers=obtener_headers(), timeout=10)
         data = resp.json()
-        stream = data[0].get("data", {}).get("user", {}).get("stream")
+        log(f"[DEBUG] Respuesta API: {data[0].get('data', {}).get('user')}")
+        user = data[0].get("data", {}).get("user")
+        if user is None:
+            return False
+        stream = user.get("stream")
         return stream is not None
     except Exception as e:
         log(f"Error al verificar estado: {e}")
         return False
 
-
 def enviar_minuto_visto():
-    """
-    Envía un ping a Twitch indicando que seguimos viendo el canal.
-    Twitch usa esto para contar minutos de visualización.
-    """
     url = "https://gql.twitch.tv/gql"
-    query = [{
-        "operationName": "VideoAdRequestHandled",
-        "variables": {
-            "input": {
-                "channelLogin": CANAL,
-                "playerType": "site"
-            }
-        },
-        "extensions": {
-            "persistedQuery": {
-                "version": 1,
-                "sha256Hash": "69a2e374748a10e27182f393a1e3b40e5a73b35af6d29e2b8d18da21f46b5e17"
+    query = [
+        {
+            "operationName": "VideoAdRequestHandled",
+            "variables": {
+                "input": {
+                    "channelLogin": CANAL.lower(),
+                    "playerType": "site"
+                }
+            },
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "69a2e374748a10e27182f393a1e3b40e5a73b35af6d29e2b8d18da21f46b5e17"
+                }
             }
         }
-    }]
-
+    ]
     try:
         resp = requests.post(url, json=query, headers=obtener_headers(), timeout=10)
         return resp.status_code == 200
     except Exception as e:
         log(f"Error al enviar ping: {e}")
         return False
-
 
 def validar_config():
     errores = []
@@ -104,7 +95,6 @@ def validar_config():
     if not AUTH_TOKEN:
         errores.append("Falta TWITCH_AUTH_TOKEN")
     return errores
-
 
 def main():
     log("=" * 50)
@@ -121,6 +111,10 @@ def main():
     log(f"Canal: {CANAL}")
     log(f"Ping cada: {CHECK_INTERVAL}s")
     log("Iniciando...\n")
+
+    en_vivo = canal_en_vivo()
+    estado = "🔴 EN VIVO" if en_vivo else "⚫ offline"
+    log(f"Estado actual: {estado}")
 
     horas = 0
     minutos = 0
@@ -146,7 +140,6 @@ def main():
                 pings_fail += 1
 
         log(f"{estado} | Tiempo: {horas}h {minutos}m | Pings OK: {pings_ok} | Fallos: {pings_fail}")
-
 
 if __name__ == "__main__":
     main()
