@@ -36,33 +36,20 @@ def obtener_headers():
     }
 
 def canal_en_vivo():
-    url = "https://gql.twitch.tv/gql"
-    query = [
-        {
-            "operationName": "StreamMetadata",
-            "variables": {"channelLogin": CANAL.lower()},
-            "extensions": {
-                "persistedQuery": {
-                    "version": 1,
-                    "sha256Hash": "a647c2a13599e5991e175155f798ca7f1ecddde73f7f341f39009c14dbf59121"
-                }
-            }
-        }
-    ]
+    """Verifica si el canal está en vivo usando la API Helix de Twitch."""
+    url = f"https://api.twitch.tv/helix/streams?user_login={CANAL.lower()}"
     try:
-        resp = requests.post(url, json=query, headers=obtener_headers(), timeout=10)
+        resp = requests.get(url, headers=obtener_headers(), timeout=10)
         data = resp.json()
-        log(f"[DEBUG] Respuesta API: {data[0].get('data', {}).get('user')}")
-        user = data[0].get("data", {}).get("user")
-        if user is None:
-            return False
-        stream = user.get("stream")
-        return stream is not None
+        log(f"[DEBUG] Helix response: {data}")
+        streams = data.get("data", [])
+        return len(streams) > 0
     except Exception as e:
         log(f"Error al verificar estado: {e}")
         return False
 
 def enviar_minuto_visto():
+    """Envía un ping a Twitch para sumar horas de visualización."""
     url = "https://gql.twitch.tv/gql"
     query = [
         {
