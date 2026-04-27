@@ -27,7 +27,7 @@ def log(mensaje):
 
 def obtener_headers():
     return {
-        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "Authorization": f"OAuth {AUTH_TOKEN}",
         "Client-Id": CLIENT_ID,
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         "Content-Type": "application/json",
@@ -36,14 +36,19 @@ def obtener_headers():
     }
 
 def canal_en_vivo():
-    """Verifica si el canal está en vivo usando la API Helix de Twitch."""
-    url = f"https://api.twitch.tv/helix/streams?user_login={CANAL.lower()}"
+    """Verifica si el canal está en vivo usando GraphQL directo."""
+    url = "https://gql.twitch.tv/gql"
+    query = [{"query": f'{{ user(login: "{CANAL.lower()}") {{ stream {{ id title }} }} }}'}]
     try:
-        resp = requests.get(url, headers=obtener_headers(), timeout=10)
+        resp = requests.post(url, json=query, headers=obtener_headers(), timeout=10)
         data = resp.json()
-        log(f"[DEBUG] Helix response: {data}")
-        streams = data.get("data", [])
-        return len(streams) > 0
+        user = data[0].get("data", {}).get("user")
+        if user is None:
+            return False
+        stream = user.get("stream")
+        if stream:
+            log(f"[INFO] Stream: {stream.get('title', '')}")
+        return stream is not None
     except Exception as e:
         log(f"Error al verificar estado: {e}")
         return False
